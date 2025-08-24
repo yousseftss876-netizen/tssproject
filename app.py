@@ -380,7 +380,11 @@ def dashboard():
         if selected_account and selected_account in user_accounts:
             account_data = user_accounts[selected_account]
             
-            # Get emails from connection manager (entity-based connections already established)
+            # Handle TSSW account selection
+            if current_user.entity == 'TSSW':
+                gmail_manager.connect_tssw_account(current_user.username, selected_account)
+            
+            # Get emails from connection manager
             emails = gmail_manager.get_emails(selected_account)
             
             if not emails:
@@ -425,7 +429,11 @@ def fetch_emails():
         
         account_data = user_accounts[selected_account]
         
-        # Get emails from connection manager (entity-based connections already established)
+        # Handle TSSW account selection
+        if current_user.entity == 'TSSW':
+            gmail_manager.connect_tssw_account(current_user.username, selected_account)
+        
+        # Get emails from connection manager
         emails = gmail_manager.get_emails(selected_account)
         
         return jsonify({
@@ -449,6 +457,10 @@ def events(account_key):
     user_accounts = get_user_accounts(current_user.entity)
     if account_key not in user_accounts:
         return Response("Unauthorized", status=403)
+    
+    # Handle TSSW account selection for events
+    if current_user.entity == 'TSSW':
+        gmail_manager.connect_tssw_account(current_user.username, account_key)
     
     def event_stream():
         try:

@@ -4,3 +4,5 @@ TSS1,hytbtn358@gmail.com,bnyq kcpg gyjt mauv
 TSS1,lyafdrb2@gmail.com,ehkn jcqd beki tftu
 TSS2,arthrromio2019@gmail.com,htav lift smlk zmfo
 TSS2,wilamartjhon@gmail.com,obbu xxwe jvdf cmwq
+TSSW,tssw.admin@gmail.com,tssw_app_password_1
+TSSW,tssw.manager@gmail.com,tssw_app_password_2

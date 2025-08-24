@@ -15,6 +15,7 @@ class EntityBasedGmailManager:
         self.entity_connections = {}  # entity -> {account_key: connection_info}
         self.active_entities = set()  # entities with at least one logged-in user
         self.logged_users = defaultdict(set)  # entity -> set of user_ids
+        self.tssw_selected_accounts = {}  # user_id -> account_key (for TSSW users)
         self.email_cache = {}  # account_key -> list of emails
         self.update_callbacks = defaultdict(list)  # account_key -> list of callback functions
         self.lock = threading.RLock()
@@ -57,26 +58,39 @@ class EntityBasedGmailManager:
         return accounts
     
     def user_login(self, user_id, user_entity):
-        """Handle user login - connect all Gmail accounts for the entity"""
+        """Handle user login - connect accounts based on entity type"""
         user_entity = user_entity.upper()
         
         with self.lock:
             # Add user to logged users
             self.logged_users[user_entity].add(user_id)
             
-            # Handle TSSW special case - they get access to all entities
+            # Handle TSSW special case - they don't auto-connect, wait for account selection
             if user_entity == 'TSSW':
-                self._activate_all_entities()
-                logging.info(f"TSSW user {user_id} logged in - connecting all entities")
+                logging.info(f"TSSW user {user_id} logged in - awaiting account selection")
             else:
                 self._activate_entity(user_entity)
                 logging.info(f"User {user_id} from entity {user_entity} logged in")
     
     def user_logout(self, user_id, user_entity):
-        """Handle user logout - disconnect entity connections if no users left"""
+        """Handle user logout - disconnect connections appropriately"""
         user_entity = user_entity.upper()
         
         with self.lock:
+            # Handle TSSW logout - disconnect their selected account if needed
+            if user_entity == 'TSSW' and user_id in self.tssw_selected_accounts:
+                selected_account = self.tssw_selected_accounts[user_id]
+                selected_entity = selected_account.split('_')[0]
+                
+                # If this was the only connection to this account and no users from that entity are logged in
+                if (selected_entity != 'TSSW' and 
+                    not self.logged_users.get(selected_entity) and
+                    selected_account in self.email_cache):
+                    self._close_connection(selected_account)
+                
+                # Remove from TSSW selections
+                del self.tssw_selected_accounts[user_id]
+            
             # Remove user from logged users
             if user_entity in self.logged_users:
                 self.logged_users[user_entity].discard(user_id)
@@ -85,10 +99,6 @@ class EntityBasedGmailManager:
                 if not self.logged_users[user_entity]:
                     self._deactivate_entity(user_entity)
                     logging.info(f"Last user from entity {user_entity} logged out - disconnecting accounts")
-                
-                # Handle TSSW logout - check if we should deactivate other entities
-                if user_entity == 'TSSW':
-                    self._check_tssw_deactivation()
     
     def get_user_accounts(self, user_entity):
         """Get Gmail accounts accessible to a user based on their entity"""
@@ -113,6 +123,117 @@ class EntityBasedGmailManager:
         """Get cached emails for an account"""
         with self.lock:
             return self.email_cache.get(account_key, [])
+    
+    def connect_tssw_account(self, user_id, account_key):
+        """Connect TSSW user to a specific account"""
+        with self.lock:
+            # Disconnect previous TSSW account selection if any
+            if user_id in self.tssw_selected_accounts:
+                old_account = self.tssw_selected_accounts[user_id]
+                self._disconnect_tssw_account(user_id, old_account)
+            
+            # Store new selection
+            self.tssw_selected_accounts[user_id] = account_key
+            
+            # Check if account is already connected
+            if account_key in self.email_cache:
+                logging.info(f"TSSW user {user_id} using existing connection for {account_key}")
+                return
+            
+            # Get account info
+            if not self.all_accounts:
+                self.load_gmail_accounts()
+            
+            if account_key not in self.all_accounts:
+                logging.error(f"Account {account_key} not found")
+                return
+            
+            account_info = self.all_accounts[account_key]
+            selected_entity = account_info['entity']
+            
+            # Check if entity has logged-in users (use existing connection)
+            if (selected_entity != 'TSSW' and 
+                self.logged_users.get(selected_entity) and 
+                selected_entity in self.active_entities):
+                logging.info(f"TSSW user {user_id} using existing {selected_entity} entity connection for {account_key}")
+                return
+            
+            # Create new connection for this specific account
+            self._start_single_connection(account_key, account_info)
+            logging.info(f"TSSW user {user_id} created new connection for {account_key}")
+    
+    def _disconnect_tssw_account(self, user_id, account_key):
+        """Disconnect TSSW user from specific account if it's not being used by others"""
+        if account_key not in self.email_cache:
+            return
+        
+        account_info = self.all_accounts.get(account_key)
+        if not account_info:
+            return
+            
+        selected_entity = account_info['entity']
+        
+        # Don't disconnect if:
+        # 1. The entity has its own users logged in
+        # 2. Other TSSW users are using this account
+        # 3. It's a TSSW account and other TSSW users are logged in
+        if (selected_entity != 'TSSW' and self.logged_users.get(selected_entity)):
+            return
+        
+        if (selected_entity == 'TSSW' and 
+            len([uid for uid, acc in self.tssw_selected_accounts.items() 
+                 if acc == account_key and uid != user_id]) > 0):
+            return
+        
+        if len(self.logged_users.get('TSSW', set())) > 1:
+            # Check if other TSSW users are using this account
+            other_tssw_using = any(acc == account_key for uid, acc in self.tssw_selected_accounts.items() if uid != user_id)
+            if other_tssw_using:
+                return
+        
+        # Safe to disconnect
+        self._close_connection(account_key)
+        logging.info(f"Disconnected TSSW account {account_key} for user {user_id}")
+    
+    def _start_single_connection(self, account_key, account_info):
+        """Start connection for a single account (used by TSSW)"""
+        try:
+            # Create IMAP connection
+            mail = imaplib.IMAP4_SSL('imap.gmail.com', 993)
+            mail.login(account_info['email'], account_info['app_password'])
+            mail.select('INBOX')
+            
+            connection_info = {
+                'mail': mail,
+                'account_info': account_info,
+                'thread': None,
+                'stop_event': threading.Event(),
+                'last_update': time.time(),
+                'single_account': True  # Mark as single account connection
+            }
+            
+            # Store in entity connections
+            entity = account_info['entity']
+            if entity not in self.entity_connections:
+                self.entity_connections[entity] = {}
+            self.entity_connections[entity][account_key] = connection_info
+            
+            # Fetch initial emails
+            self._fetch_emails(account_key)
+            
+            # Start monitoring thread
+            monitor_thread = threading.Thread(
+                target=self._monitor_connection,
+                args=(account_key,),
+                daemon=True
+            )
+            monitor_thread.start()
+            connection_info['thread'] = monitor_thread
+            
+            logging.info(f"Started single connection for {account_key}")
+            
+        except Exception as e:
+            logging.error(f"Failed to start single connection for {account_key}: {e}")
     
     def add_update_callback(self, account_key, callback):
         """Add a callback function to be called when emails are updated"""
@@ -155,18 +276,6 @@ class EntityBasedGmailManager:
             del self.entity_connections[entity]
         
         logging.info(f"Deactivated entity {entity}")
-    
-    def _activate_all_entities(self):
-        """Activate all entities (for TSSW users)"""
-        # Ensure accounts are loaded
-        if not self.all_accounts:
-            self.load_gmail_accounts()
-        
-        # Get all unique entities
-        all_entities = set(account['entity'] for account in self.all_accounts.values())
-        
-        for entity in all_entities:
-            self._activate_entity(entity)
     
     def _check_tssw_deactivation(self):
         """Check if we should deactivate entities after TSSW logout"""
