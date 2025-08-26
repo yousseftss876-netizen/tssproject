@@ -4,5 +4,10 @@ TSS1,hytbtn358@gmail.com,bnyq kcpg gyjt mauv
 TSS1,lyafdrb2@gmail.com,ehkn jcqd beki tftu
 TSS2,arthrromio2019@gmail.com,htav lift smlk zmfo
 TSS2,wilamartjhon@gmail.com,obbu xxwe jvdf cmwq
+TSS3,tss3.account1@gmail.com,tss3_app_password_1
+TSS3,tss3.account2@gmail.com,tss3_app_password_2
+TSSF,tssf.finance@gmail.com,tssf_app_password_1
+TSSF,tssf.operations@gmail.com,tssf_app_password_2
+TSSF,tssf.support@gmail.com,tssf_app_password_3
 TSSW,tssw.admin@gmail.com,tssw_app_password_1
 TSSW,tssw.manager@gmail.com,tssw_app_password_2

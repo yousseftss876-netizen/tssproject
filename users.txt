@@ -7,3 +7,7 @@ TSS2,I.Ait_Hadi,Q13T2v52HGNdVoJe7hs59pQ
 TSS2,R.El_Abdellaoui,KIB05zGqmYFf36x5zqK2iBS
 TSS2,H.AHADDOUCH,3oM5UULBZuDWiEDb2l1EN1X
 TSS2,Adnan,efa3Jwe4g7Ei3c0I94NMDER
+TSS3,tss3.user1,tss3_password_1
+TSS3,tss3.user2,tss3_password_2
+TSSF,tssf.admin,tssf_password_1
+TSSF,tssf.manager,tssf_password_2

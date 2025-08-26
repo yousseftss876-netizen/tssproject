@@ -80,13 +80,29 @@ The application uses Flask as the core web framework with Flask-Login for authen
 - **TSS1**: Access to TSS1-specific Gmail accounts only
 - **TSS2**: Access to TSS2-specific Gmail accounts only  
 - **TSS3**: Access to TSS3-specific Gmail accounts only
-- **TSSW**: Administrative access to all entity Gmail accounts
+- **TSSF**: Access to TSSF-specific Gmail accounts only (Finance entity)
+- **TSSW**: Administrative access to all entity Gmail accounts (TSS1, TSS2, TSS3, TSSF, plus TSSW-specific accounts)
+
+## Entity Color Coding
+Visual identification in Gmail account dropdown menu:
+- **TSS1**: Blue (bg-gradient-to-br from-blue-500 to-blue-600)
+- **TSS2**: Green (bg-gradient-to-br from-green-500 to-green-600)
+- **TSS3**: Yellow (bg-gradient-to-br from-yellow-500 to-yellow-600)
+- **TSSF**: Orange (bg-gradient-to-br from-orange-500 to-orange-600)
+- **TSSW**: Red (bg-gradient-to-br from-red-500 to-red-600)
 
 ## Authentication Files
 - **users.txt**: Format: `Entity,Username,Password` (one per line)
 - **gmailaccounts.txt**: Format: `Entity,EmailAddress,AppPassword` (one per line)
 
 ## Recent Changes (August 2025)
+### TSSF Entity Integration and Color Coding System (August 26, 2025)
+- ✅ Added new TSSF entity (Finance) with same access control as TSS1/TSS2/TSS3
+- ✅ Updated TSSW access to include TSSF accounts alongside TSS1/TSS2/TSS3
+- ✅ Implemented entity-based color coding system in Gmail account dropdown
+- ✅ Added example TSSF Gmail accounts and users to configuration files
+- ✅ Enhanced visual identification with gradient color scheme
+
 ### Migration to Replit Environment  
 - ✅ Successfully migrated from Replit Agent to standard Replit environment
 - ✅ Installed all required dependencies (Flask, Flask-Login, gunicorn, etc.)
