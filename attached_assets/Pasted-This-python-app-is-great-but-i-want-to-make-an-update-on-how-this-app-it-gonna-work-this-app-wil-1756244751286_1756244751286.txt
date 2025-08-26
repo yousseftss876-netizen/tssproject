@@ -1,0 +1,24 @@
+This python app is great, but i want to make an update on how this app it gonna work:
+- this app will offer so many services one of those services is "TSS GMAIL ACCESS", so the user when he will log in to the dahsbord using his username and password, he will found a page to let him chose which services he want
+
+- for now he will found those 2 services "TSS GMAIL ACCESS" (this services will work normally when he acess to it), and secound services called "tss extract emails".
+
+- for "tss extract emails" services, when the user acess to this services, he will found a dashbord and those text inputs:
+
+Email adresse, app_passwrod, from domain, subject.
+And button of extract
+The user he must entre correct email adress and app password(required that those input must be full, if not the app will show an erreur), when he click on e
+Buttons extracts, the app must be get last 50 emails using gmail account and app password given(if they were true), and of course using imap that will help to get those emails.
+
+The emails must be stored in a table that will show those information.
+Ip adress, spf is it pass?, dkim is it pass, from domain, subject, type of emails(is it inbox or spam, and which category if ot was inbox, is it primary, promotion or update....)
+The table must be well customize and well designed.
+
+If the user put somthing on those input text:
+from domain, subject
+The app will get last 50 emails that have same subject of same from domain( if they were in the gmail account, be aware to the uppercase and lowercase not a problem if they were different).
+
+When you show like this table to the user, you should give him the option if he want to download the results into a file csv, have all informations
+pleas make sure that design be great and increadible and make my app easy to use, enjoyable and have great ui/ux design rules.
+
+pleas, before you start updating on this app, if you have any misunderstanding of somthing not clear, feel free to ask me, to make sure that you undestand all my request
