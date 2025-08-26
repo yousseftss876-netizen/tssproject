@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSS Services - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .service-card {
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        }
+        
+        .service-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        
+        .user-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .service-icon {
+            background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+        }
+        
+        .extract-icon {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-gray-800">
+                        <i class="fas fa-cogs text-blue-600 mr-2"></i>
+                        TSS Services Platform
+                    </h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <!-- User Info -->
+                    <div class="user-badge text-white px-3 py-2 rounded-lg">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-user-circle"></i>
+                            <div class="text-sm">
+                                <div class="font-semibold">{{ current_user.username }}</div>
+                                <div class="text-xs opacity-90">{{ current_user.entity }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Logout Button -->
+                    <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg transition-colors duration-200 flex items-center text-sm">
+                        <i class="fas fa-sign-out-alt mr-2"></i>
+                        Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Welcome Section -->
+        <div class="text-center mb-12">
+            <h2 class="text-4xl font-bold text-gray-800 mb-4">
+                Welcome, {{ current_user.username }}!
+            </h2>
+            <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                Choose from our powerful email management services designed for your {{ current_user.entity }} entity.
+                Select a service below to get started.
+            </p>
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="mb-6 p-4 rounded-lg {% if category == 'error' %}bg-red-50 border border-red-200 text-red-700{% elif category == 'success' %}bg-green-50 border border-green-200 text-green-700{% else %}bg-blue-50 border border-blue-200 text-blue-700{% endif %}">
+                        <div class="flex items-center">
+                            <i class="fas {% if category == 'error' %}fa-exclamation-triangle{% elif category == 'success' %}fa-check-circle{% else %}fa-info-circle{% endif %} mr-2"></i>
+                            {{ message }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Services Grid -->
+        <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <!-- TSS Gmail Access Service -->
+            <div class="service-card bg-white rounded-2xl p-8 border border-gray-200 cursor-pointer" 
+                 onclick="window.location.href='{{ url_for('dashboard') }}'">
+                <div class="text-center">
+                    <!-- Service Icon -->
+                    <div class="service-icon w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-envelope text-white text-2xl"></i>
+                    </div>
+                    
+                    <!-- Service Title -->
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">TSS Gmail Access</h3>
+                    
+                    <!-- Service Description -->
+                    <p class="text-gray-600 mb-6 leading-relaxed">
+                        Access and manage Gmail accounts based on your entity permissions. 
+                        View emails with real-time synchronization and advanced filtering capabilities.
+                    </p>
+                    
+                    <!-- Features List -->
+                    <div class="text-left space-y-2 mb-6">
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            Entity-based account access
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            Real-time email synchronization
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            Advanced search and filtering
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            Folder categorization
+                        </div>
+                    </div>
+                    
+                    <!-- Action Button -->
+                    <div class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition-colors duration-200 font-semibold">
+                        <i class="fas fa-arrow-right mr-2"></i>
+                        Access Gmail
+                    </div>
+                </div>
+            </div>
+
+            <!-- TSS Extract Emails Service -->
+            <div class="service-card bg-white rounded-2xl p-8 border border-gray-200 cursor-pointer" 
+                 onclick="window.location.href='{{ url_for('extract_emails') }}'">
+                <div class="text-center">
+                    <!-- Service Icon -->
+                    <div class="extract-icon w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-search text-white text-2xl"></i>
+                    </div>
+                    
+                    <!-- Service Title -->
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">TSS Extract Emails</h3>
+                    
+                    <!-- Service Description -->
+                    <p class="text-gray-600 mb-6 leading-relaxed">
+                        Extract and analyze emails from any Gmail account with detailed security information. 
+                        Get SPF, DKIM status, sender IPs, and export results to CSV.
+                    </p>
+                    
+                    <!-- Features List -->
+                    <div class="text-left space-y-2 mb-6">
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            Extract from any Gmail account
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            SPF & DKIM security analysis
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            Sender IP address extraction
+                        </div>
+                        <div class="flex items-center text-sm text-gray-600">
+                            <i class="fas fa-check text-green-500 mr-2"></i>
+                            CSV export functionality
+                        </div>
+                    </div>
+                    
+                    <!-- Action Button -->
+                    <div class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg transition-colors duration-200 font-semibold">
+                        <i class="fas fa-arrow-right mr-2"></i>
+                        Extract Emails
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Info -->
+        <div class="text-center mt-12">
+            <p class="text-gray-500 text-sm">
+                Need help? Contact your system administrator for assistance with these services.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

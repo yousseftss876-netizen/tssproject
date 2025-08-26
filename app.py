@@ -6,6 +6,7 @@ from email.header import decode_header
 from datetime import datetime, timezone
 import logging
 import json
+import re
 from flask import Flask, render_template, request, flash, jsonify, redirect, url_for, session, Response
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from connection_manager import gmail_manager
@@ -127,6 +128,182 @@ def decode_mime_words(s):
             decoded_parts.append(str(part))
     
     return ''.join(decoded_parts)
+
+def extract_and_analyze_emails(email_address, app_password, from_domain=None, subject_filter=None):
+    """Extract and analyze emails with SPF, DKIM, IP address, and categorization"""
+    try:
+        # Connect to Gmail
+        mail = connect_to_gmail(email_address, app_password)
+        if not mail:
+            return None
+        
+        extracted_emails = []
+        
+        # Get folders to check
+        folders_to_check = ['INBOX', '[Gmail]/Spam']
+        
+        for folder in folders_to_check:
+            try:
+                mail.select(folder, readonly=True)  # Keep emails unread
+                
+                # Search for emails
+                result, message_ids = mail.uid('search', None, 'ALL')
+                if result != 'OK':
+                    continue
+                
+                uid_list = message_ids[0].split()
+                # Get last 50 emails from this folder
+                uid_list = uid_list[-50:] if len(uid_list) > 50 else uid_list
+                
+                for uid in uid_list:
+                    try:
+                        # Fetch email headers and body
+                        result, msg_data = mail.uid('fetch', uid, '(RFC822)')
+                        if result != 'OK' or not msg_data or not msg_data[0]:
+                            continue
+                        
+                        # Parse email
+                        email_message = email.message_from_bytes(msg_data[0][1])
+                        
+                        # Extract basic info
+                        subject = decode_mime_words(email_message.get('Subject', ''))
+                        from_header = email_message.get('From', '')
+                        date_header = email_message.get('Date', '')
+                        
+                        # Parse from header
+                        from_name, from_email = email.utils.parseaddr(from_header)
+                        from_email = from_email.lower()
+                        from_domain_extracted = from_email.split('@')[-1] if '@' in from_email else ''
+                        
+                        # Apply filters if specified
+                        if from_domain and from_domain.lower() not in from_domain_extracted.lower():
+                            continue
+                        if subject_filter and subject_filter.lower() not in subject.lower():
+                            continue
+                        
+                        # Extract security info from headers
+                        ip_address = extract_sender_ip(email_message)
+                        spf_status = extract_spf_status(email_message)
+                        dkim_status = extract_dkim_status(email_message)
+                        
+                        # Determine email type and category
+                        email_type = 'Spam' if folder == '[Gmail]/Spam' else 'Inbox'
+                        category = ''
+                        
+                        if email_type == 'Inbox':
+                            # Get Gmail category
+                            category = get_gmail_category(mail, uid)
+                        
+                        # Format date
+                        try:
+                            parsed_date = email.utils.parsedate_to_datetime(date_header)
+                            formatted_date = parsed_date.strftime('%Y-%m-%d %H:%M')
+                        except:
+                            formatted_date = date_header[:50] if date_header else 'Unknown'
+                        
+                        extracted_emails.append({
+                            'ip_address': ip_address,
+                            'spf_status': spf_status,
+                            'dkim_status': dkim_status,
+                            'from_domain': from_domain_extracted,
+                            'subject': subject[:100],  # Limit length
+                            'email_type': email_type,
+                            'category': category,
+                            'date': formatted_date
+                        })
+                        
+                    except Exception as e:
+                        logging.error(f"Error processing email UID {uid}: {e}")
+                        continue
+                        
+            except Exception as e:
+                logging.error(f"Error accessing folder {folder}: {e}")
+                continue
+        
+        mail.logout()
+        return extracted_emails
+        
+    except Exception as e:
+        logging.error(f"Error in extract_and_analyze_emails: {e}")
+        return None
+
+def extract_sender_ip(email_message):
+    """Extract sender IP address from email headers"""
+    try:
+        # Check various IP-containing headers
+        received_headers = email_message.get_all('Received', [])
+        
+        for received in received_headers:
+            # Look for IP addresses in Received headers
+
+            ip_pattern = r'\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]'
+            matches = re.findall(ip_pattern, received)
+            if matches:
+                # Return the first external IP (not private)
+                for ip in matches:
+                    if not ip.startswith(('10.', '192.168.', '172.')):
+                        return ip
+                # If no external IP, return first IP
+                return matches[0] if matches else None
+        
+        return None
+    except:
+        return None
+
+def extract_spf_status(email_message):
+    """Extract SPF status from Authentication-Results header"""
+    try:
+        auth_results = email_message.get('Authentication-Results', '')
+        if 'spf=pass' in auth_results.lower():
+            return 'PASS'
+        elif 'spf=fail' in auth_results.lower():
+            return 'FAIL'
+        elif 'spf=softfail' in auth_results.lower():
+            return 'SOFTFAIL'
+        elif 'spf=neutral' in auth_results.lower():
+            return 'NEUTRAL'
+        elif 'spf=none' in auth_results.lower():
+            return 'NONE'
+        return 'UNKNOWN'
+    except:
+        return 'UNKNOWN'
+
+def extract_dkim_status(email_message):
+    """Extract DKIM status from Authentication-Results header"""
+    try:
+        auth_results = email_message.get('Authentication-Results', '')
+        if 'dkim=pass' in auth_results.lower():
+            return 'PASS'
+        elif 'dkim=fail' in auth_results.lower():
+            return 'FAIL'
+        elif 'dkim=neutral' in auth_results.lower():
+            return 'NEUTRAL'
+        elif 'dkim=none' in auth_results.lower():
+            return 'NONE'
+        return 'UNKNOWN'
+    except:
+        return 'UNKNOWN'
+
+def get_gmail_category(mail, uid):
+    """Get Gmail category for an email"""
+    try:
+        result, msg_data = mail.uid('fetch', uid, '(X-GM-LABELS)')
+        if result == 'OK' and msg_data and msg_data[0]:
+            labels_info = msg_data[0][1].decode('utf-8', errors='ignore') if isinstance(msg_data[0][1], bytes) else str(msg_data[0][1])
+            
+            if '\\\\Category\\\\Promotions' in labels_info or 'Category/Promotions' in labels_info:
+                return 'Promotions'
+            elif '\\\\Category\\\\Social' in labels_info or 'Category/Social' in labels_info:
+                return 'Social'
+            elif '\\\\Category\\\\Updates' in labels_info or 'Category/Updates' in labels_info:
+                return 'Updates'
+            elif '\\\\Category\\\\Forums' in labels_info or 'Category/Forums' in labels_info:
+                return 'Forums'
+            else:
+                return 'Primary'
+        return 'Primary'
+    except:
+        return 'Primary'
 
 def get_gmail_folder_type(mail, uid):
     """Determine Gmail folder type based only on authentic Gmail X-GM-LABELS"""
@@ -327,7 +504,7 @@ def login():
             next_page = request.args.get('next')
             if next_page:
                 return redirect(next_page)
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('services'))
         else:
             flash('Invalid username or password. Please try again.', 'error')
     
@@ -349,7 +526,43 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('services'))
+
+@app.route('/services')
+@login_required
+def services():
+    """Main services selection page"""
+    return render_template('services.html', current_user=current_user)
+
+@app.route('/extract_emails', methods=['GET', 'POST'])
+@login_required
+def extract_emails():
+    """TSS Extract Emails service"""
+    if request.method == 'GET':
+        return render_template('extract_emails.html', current_user=current_user)
+    
+    # Handle POST request for email extraction
+    try:
+        email_address = request.form.get('email_address', '').strip()
+        app_password = request.form.get('app_password', '').strip()
+        from_domain = request.form.get('from_domain', '').strip()
+        subject_filter = request.form.get('subject', '').strip()
+        
+        # Validate required fields
+        if not email_address or not app_password:
+            return jsonify({'success': False, 'error': 'Email address and app password are required'})
+        
+        # Extract and analyze emails
+        extracted_data = extract_and_analyze_emails(email_address, app_password, from_domain, subject_filter)
+        
+        if extracted_data is None:
+            return jsonify({'success': False, 'error': 'Failed to connect to Gmail account. Please check your credentials.'})
+        
+        return jsonify({'success': True, 'data': extracted_data})
+        
+    except Exception as e:
+        logging.error(f"Error in extract_emails: {e}")
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'})
 
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required

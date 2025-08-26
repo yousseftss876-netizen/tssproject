@@ -96,6 +96,16 @@ Visual identification in Gmail account dropdown menu:
 - **gmailaccounts.txt**: Format: `Entity,EmailAddress,AppPassword` (one per line)
 
 ## Recent Changes (August 2025)
+### Multi-Service Platform Implementation (August 26, 2025)
+- ✅ Transformed application into multi-service platform with service selection dashboard
+- ✅ Added "TSS Gmail Access" service (existing functionality)
+- ✅ Implemented "TSS Extract Emails" service with advanced email analysis
+- ✅ Email extraction features: SPF/DKIM status, sender IP addresses, email categorization
+- ✅ Added filtering by domain and subject with case-insensitive matching
+- ✅ Implemented CSV export functionality for extracted data
+- ✅ Ensured emails remain unread during extraction process
+- ✅ Available to all entities with any Gmail credentials (not entity-restricted)
+
 ### TSSF Entity Integration and Color Coding System (August 26, 2025)
 - ✅ Added new TSSF entity (Finance) with same access control as TSS1/TSS2/TSS3
 - ✅ Updated TSSW access to include TSSF accounts alongside TSS1/TSS2/TSS3
