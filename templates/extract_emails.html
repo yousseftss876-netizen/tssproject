@@ -175,37 +175,50 @@
                         >
                         <p class="text-xs text-gray-500 mt-1">Gmail App Password (not regular password)</p>
                     </div>
+                </div>
 
-                    <!-- From Domain (Optional) -->
-                    <div class="flex flex-col">
-                        <label for="from_domain" class="text-sm font-semibold text-gray-700 mb-2">
-                            <i class="fas fa-globe mr-2"></i>
-                            From Domain (Optional)
-                        </label>
-                        <input 
-                            type="text" 
-                            name="from_domain" 
-                            id="from_domain" 
-                            placeholder="example.com"
-                            class="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
-                        >
-                        <p class="text-xs text-gray-500 mt-1">Filter emails from specific domain</p>
-                    </div>
-
-                    <!-- Subject (Optional) -->
-                    <div class="flex flex-col">
-                        <label for="subject" class="text-sm font-semibold text-gray-700 mb-2">
-                            <i class="fas fa-envelope-open-text mr-2"></i>
-                            Subject (Optional)
-                        </label>
-                        <input 
-                            type="text" 
-                            name="subject" 
-                            id="subject" 
-                            placeholder="Subject keywords..."
-                            class="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
-                        >
-                        <p class="text-xs text-gray-500 mt-1">Filter emails containing subject keywords</p>
+                <!-- Email Limit Options -->
+                <div class="mt-6">
+                    <label class="text-sm font-semibold text-gray-700 mb-3 block">
+                        <i class="fas fa-list-ol mr-2"></i>
+                        Email Limit
+                    </label>
+                    <div class="space-y-3">
+                        <div class="flex items-center">
+                            <input 
+                                type="radio" 
+                                name="email_limit" 
+                                id="limit_all" 
+                                value="all" 
+                                checked
+                                class="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500"
+                            >
+                            <label for="limit_all" class="ml-2 text-sm text-gray-700">
+                                Get All Emails (Max 200 - Server Capacity Limit)
+                            </label>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input 
+                                type="radio" 
+                                name="email_limit" 
+                                id="limit_custom" 
+                                value="limited"
+                                class="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500"
+                            >
+                            <label for="limit_custom" class="text-sm text-gray-700">Limited Emails:</label>
+                            <input 
+                                type="number" 
+                                name="custom_limit" 
+                                id="custom_limit" 
+                                min="1" 
+                                max="200" 
+                                value="50"
+                                placeholder="50"
+                                disabled
+                                class="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            >
+                            <span class="text-xs text-gray-500">(Max: 200)</span>
+                        </div>
                     </div>
                 </div>
 
@@ -240,6 +253,7 @@
                 </h3>
                 <div class="flex space-x-4">
                     <span id="resultsCount" class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold"></span>
+                    <span id="filteredCount" class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold hidden"></span>
                     <button 
                         id="exportBtn"
                         class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-colors duration-200"
@@ -250,18 +264,84 @@
                 </div>
             </div>
 
+            <!-- Dashboard Filters -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">
+                    <i class="fas fa-filter mr-2"></i>
+                    Dashboard Filters
+                </h4>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div class="flex flex-col">
+                        <label for="filter_domain" class="text-xs font-semibold text-gray-600 mb-1">From Domain</label>
+                        <input 
+                            type="text" 
+                            id="filter_domain" 
+                            placeholder="example.com"
+                            class="px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                    </div>
+                    <div class="flex flex-col">
+                        <label for="filter_subject" class="text-xs font-semibold text-gray-600 mb-1">Subject</label>
+                        <input 
+                            type="text" 
+                            id="filter_subject" 
+                            placeholder="Subject keywords..."
+                            class="px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                    </div>
+                </div>
+            </div>
+
             <!-- Results Table -->
             <div class="results-table bg-white rounded-lg shadow-md overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50 border-b border-gray-200">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">IP Address</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">SPF Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">DKIM Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                    <div class="flex items-center justify-between">
+                                        <span>IP Address</span>
+                                        <button 
+                                            id="copyIpBtn"
+                                            class="ml-2 bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs transition-colors"
+                                            title="Copy all IP addresses"
+                                        >
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                    <div class="flex items-center justify-between">
+                                        <span>SPF Status</span>
+                                        <select id="spfFilter" class="ml-2 bg-white border border-gray-300 rounded px-2 py-1 text-xs">
+                                            <option value="All">All</option>
+                                            <option value="PASS">PASS</option>
+                                            <option value="UNKNOWN">UNKNOWN</option>
+                                        </select>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                    <div class="flex items-center justify-between">
+                                        <span>DKIM Status</span>
+                                        <select id="dkimFilter" class="ml-2 bg-white border border-gray-300 rounded px-2 py-1 text-xs">
+                                            <option value="All">All</option>
+                                            <option value="PASS">PASS</option>
+                                            <option value="UNKNOWN">UNKNOWN</option>
+                                        </select>
+                                    </div>
+                                </th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">From Domain</th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Subject</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Email Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                    <div class="flex items-center justify-between">
+                                        <span>Email Type</span>
+                                        <select id="typeFilter" class="ml-2 bg-white border border-gray-300 rounded px-2 py-1 text-xs">
+                                            <option value="All">All</option>
+                                            <option value="Inbox">INBOX</option>
+                                            <option value="Spam">SPAM</option>
+                                        </select>
+                                    </div>
+                                </th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
                             </tr>
                         </thead>
@@ -276,6 +356,20 @@
 
     <script>
         let extractedData = [];
+        let filteredData = [];
+
+        // Handle radio button changes for email limit
+        document.querySelectorAll('input[name="email_limit"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const customLimitInput = document.getElementById('custom_limit');
+                if (this.value === 'limited') {
+                    customLimitInput.disabled = false;
+                    customLimitInput.focus();
+                } else {
+                    customLimitInput.disabled = true;
+                }
+            });
+        });
 
         document.getElementById('extractForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -301,8 +395,9 @@
                 
                 if (result.success) {
                     extractedData = result.data;
-                    displayResults(result.data);
-                    document.getElementById('resultsCount').textContent = `${result.data.length} emails found`;
+                    filteredData = [...result.data]; // Copy for filtering
+                    displayResults(filteredData);
+                    updateCounts();
                     resultsSection.classList.remove('hidden');
                 } else {
                     alert('Error: ' + result.error);
@@ -346,13 +441,99 @@
             });
         }
 
+        function updateCounts() {
+            document.getElementById('resultsCount').textContent = `${extractedData.length} total emails`;
+            const filteredCountEl = document.getElementById('filteredCount');
+            if (filteredData.length !== extractedData.length) {
+                filteredCountEl.textContent = `${filteredData.length} shown`;
+                filteredCountEl.classList.remove('hidden');
+            } else {
+                filteredCountEl.classList.add('hidden');
+            }
+        }
+
+        function applyFilters() {
+            const domainFilter = document.getElementById('filter_domain').value.toLowerCase().trim();
+            const subjectFilter = document.getElementById('filter_subject').value.toLowerCase().trim();
+            const spfFilter = document.getElementById('spfFilter').value;
+            const dkimFilter = document.getElementById('dkimFilter').value;
+            const typeFilter = document.getElementById('typeFilter').value;
+
+            filteredData = extractedData.filter(email => {
+                // Domain filter
+                if (domainFilter && !email.from_domain.toLowerCase().includes(domainFilter)) {
+                    return false;
+                }
+                
+                // Subject filter
+                if (subjectFilter && !email.subject.toLowerCase().includes(subjectFilter)) {
+                    return false;
+                }
+                
+                // SPF filter
+                if (spfFilter !== 'All' && email.spf_status !== spfFilter) {
+                    return false;
+                }
+                
+                // DKIM filter
+                if (dkimFilter !== 'All' && email.dkim_status !== dkimFilter) {
+                    return false;
+                }
+                
+                // Type filter
+                if (typeFilter !== 'All' && email.email_type !== typeFilter) {
+                    return false;
+                }
+                
+                return true;
+            });
+
+            displayResults(filteredData);
+            updateCounts();
+        }
+
+        // Add event listeners for all filters
+        document.getElementById('filter_domain').addEventListener('input', applyFilters);
+        document.getElementById('filter_subject').addEventListener('input', applyFilters);
+        document.getElementById('spfFilter').addEventListener('change', applyFilters);
+        document.getElementById('dkimFilter').addEventListener('change', applyFilters);
+        document.getElementById('typeFilter').addEventListener('change', applyFilters);
+
+        // Copy IP addresses functionality
+        document.getElementById('copyIpBtn').addEventListener('click', function() {
+            const ipAddresses = filteredData
+                .map(email => email.ip_address)
+                .filter(ip => ip && ip !== 'N/A')
+                .join('\n');
+            
+            if (ipAddresses) {
+                navigator.clipboard.writeText(ipAddresses).then(() => {
+                    // Visual feedback
+                    this.innerHTML = '<i class="fas fa-check"></i>';
+                    this.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                    this.classList.add('bg-green-500');
+                    
+                    setTimeout(() => {
+                        this.innerHTML = '<i class="fas fa-copy"></i>';
+                        this.classList.remove('bg-green-500');
+                        this.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                    }, 2000);
+                }).catch(() => {
+                    alert('Failed to copy IP addresses to clipboard');
+                });
+            } else {
+                alert('No IP addresses to copy');
+            }
+        });
+
         function truncateText(text, maxLength) {
+            if (!text) return '';
             if (text.length <= maxLength) return text;
             return text.substring(0, maxLength) + '...';
         }
 
         document.getElementById('exportBtn').addEventListener('click', function() {
-            exportToCSV(extractedData);
+            exportToCSV(filteredData); // Export filtered data
         });
 
         function exportToCSV(data) {

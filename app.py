@@ -129,7 +129,7 @@ def decode_mime_words(s):
     
     return ''.join(decoded_parts)
 
-def extract_and_analyze_emails(email_address, app_password, from_domain=None, subject_filter=None):
+def extract_and_analyze_emails(email_address, app_password, email_limit='all'):
     """Extract and analyze emails with SPF, DKIM, IP address, and categorization"""
     try:
         # Connect to Gmail
@@ -152,8 +152,17 @@ def extract_and_analyze_emails(email_address, app_password, from_domain=None, su
                     continue
                 
                 uid_list = message_ids[0].split()
-                # Get last 50 emails from this folder
-                uid_list = uid_list[-50:] if len(uid_list) > 50 else uid_list
+                # Apply email limit based on user selection
+                if email_limit != 'all':
+                    try:
+                        limit = min(int(email_limit), 200)  # Max 200 emails
+                        uid_list = uid_list[-limit:] if len(uid_list) > limit else uid_list
+                    except (ValueError, TypeError):
+                        # Default to 50 if invalid limit
+                        uid_list = uid_list[-50:] if len(uid_list) > 50 else uid_list
+                else:
+                    # For 'all', limit to 200 max
+                    uid_list = uid_list[-200:] if len(uid_list) > 200 else uid_list
                 
                 for uid in uid_list:
                     try:
@@ -175,11 +184,7 @@ def extract_and_analyze_emails(email_address, app_password, from_domain=None, su
                         from_email = from_email.lower()
                         from_domain_extracted = from_email.split('@')[-1] if '@' in from_email else ''
                         
-                        # Apply filters if specified
-                        if from_domain and from_domain.lower() not in from_domain_extracted.lower():
-                            continue
-                        if subject_filter and subject_filter.lower() not in subject.lower():
-                            continue
+                        # No filtering here - moved to dashboard client-side
                         
                         # Extract security info from headers
                         ip_address = extract_sender_ip(email_message)
@@ -545,15 +550,19 @@ def extract_emails():
     try:
         email_address = request.form.get('email_address', '').strip()
         app_password = request.form.get('app_password', '').strip()
-        from_domain = request.form.get('from_domain', '').strip()
-        subject_filter = request.form.get('subject', '').strip()
         
         # Validate required fields
         if not email_address or not app_password:
             return jsonify({'success': False, 'error': 'Email address and app password are required'})
         
+        # Get email limit from form
+        email_limit = request.form.get('email_limit', 'all').strip()
+        if email_limit == 'limited':
+            custom_limit = request.form.get('custom_limit', '50').strip()
+            email_limit = custom_limit
+        
         # Extract and analyze emails
-        extracted_data = extract_and_analyze_emails(email_address, app_password, from_domain, subject_filter)
+        extracted_data = extract_and_analyze_emails(email_address, app_password, email_limit)
         
         if extracted_data is None:
             return jsonify({'success': False, 'error': 'Failed to connect to Gmail account. Please check your credentials.'})
