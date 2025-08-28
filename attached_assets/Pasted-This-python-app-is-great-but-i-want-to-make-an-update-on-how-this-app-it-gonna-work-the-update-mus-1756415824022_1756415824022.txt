@@ -1,0 +1,22 @@
+This python app is great, but i want to make an update on how this app it gonna work, the update must be done for "tss extract emails" service:
+
+- For those 2 input "from domain", "subject" try to remove them from there place right now.
+
+- Dont limit user just in 50 emails to get from gmail account, give them option, give them 2 radio button to make the users chose, if the user select radio option "all", the app must get all emails from gmail account(display to them that the app will not get more then 200 emails, because this is the capacity of the serveur), if he select "limite email", then the app must display a input text, that required to the users to tell how much emails he want to get(of course he must not give more then 200)
+
+- when the dahsbord display, display with it those 2 text inputs "from domain", "subject", when user type somthing on them, then the emails will automatically filtred based on the content of those 2 inputs.
+
+- when the emails display on the table dahsbord, try to add those select option of each row in the head of the row:
+
+For ip adresse row head: it must be a copy button to let user copy all ip adress that are display on the dashbord table
+For SPF row head: it must be there a select option have this options("All","PASS","UNKNOW"), the emails will be filtred based on this selection
+For Dkim Row head:it must be there a select option have this options("All","PASS","UNKNOW"), the emails will be filtred based on this selection
+For folder type row head:it must be there a select option have this options("All","INBOX","SPAM"), the emails will be filtred based on this selection
+
+and of course the table emails dashbord must take on responsability those select option and display emails that the user want
+
+make sure to display which category inbox emails have ("Primary","Promotion","Update","Social"...)
+
+And of course when the users download emails in csv files, download based on select option or content in the inputs he made any change.
+
+pleas, before you start updating on this app, if you have any misunderstanding of somthing or something not clear, just ask me befor you start updationg the app, to make sure you understand well what i want
