@@ -147,7 +147,7 @@ def extract_and_analyze_emails(email_address, app_password, from_domain=None, su
                 mail.select(folder, readonly=True)  # Keep emails unread
                 
                 # Search for emails
-                result, message_ids = mail.uid('search', None, 'ALL')
+                result, message_ids = mail.uid('search', 'ALL')
                 if result != 'OK':
                     continue
                 
