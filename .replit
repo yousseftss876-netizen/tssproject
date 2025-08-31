@@ -1,5 +1,5 @@
 modules = ["web", "python-3.11"]
-run = "python app.py"
+run = "python main.py"
 
 [nix]
 channel = "stable-25_05"
@@ -7,7 +7,7 @@ packages = ["openssl", "postgresql"]
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["sh", "-c", "python app.py"]
+run = ["sh", "-c", "python main.py"]
 
 [workflows]
 runButton = "Project"
