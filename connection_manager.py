@@ -9,7 +9,7 @@ import logging
 from collections import defaultdict
 
 class EntityBasedGmailManager:
-    """Enhanced Gmail connection manager with entity-based connection pooling"""
+    """Enhanced Gmail connection manager with smart monitoring and health management"""
     
     def __init__(self):
         self.entity_connections = {}  # entity -> {account_key: connection_info}
@@ -20,7 +20,19 @@ class EntityBasedGmailManager:
         self.update_callbacks = defaultdict(list)  # account_key -> list of callback functions
         self.lock = threading.RLock()
         self.all_accounts = {}  # account_key -> account_info (loaded from file)
-        logging.info("EntityBasedGmailManager initialized")
+        
+        # Enhanced monitoring system
+        self.connection_stats = {}  # account_key -> stats (health, last_heartbeat, errors, etc.)
+        self.health_monitor_thread = None
+        self.health_monitor_stop = threading.Event()
+        self.rebuilding_connections = set()  # accounts currently being rebuilt
+        self.heartbeat_interval = 120  # Send heartbeat every 2 minutes
+        self.health_check_interval = 300  # Check health every 5 minutes
+        self.max_connection_age = 900  # Rebuild connections older than 15 minutes
+        
+        # Start global health monitoring
+        self._start_health_monitoring()
+        logging.info("Enhanced EntityBasedGmailManager initialized with smart monitoring")
     
     def load_gmail_accounts(self):
         """Load Gmail accounts from gmailaccounts.txt file"""
@@ -218,6 +230,9 @@ class EntityBasedGmailManager:
                 self.entity_connections[entity] = {}
             self.entity_connections[entity][account_key] = connection_info
             
+            # Initialize connection stats
+            self._init_connection_stats(account_key)
+            
             # Fetch initial emails
             self._fetch_emails(account_key)
             
@@ -309,6 +324,9 @@ class EntityBasedGmailManager:
                 self.entity_connections[entity] = {}
             self.entity_connections[entity][account_key] = connection_info
             
+            # Initialize connection stats
+            self._init_connection_stats(account_key)
+            
             # Fetch initial emails
             self._fetch_emails(account_key)
             
@@ -349,6 +367,8 @@ class EntityBasedGmailManager:
                 del self.email_cache[account_key]
             if account_key in self.update_callbacks:
                 del self.update_callbacks[account_key]
+            if account_key in self.connection_stats:
+                del self.connection_stats[account_key]
             
             logging.info(f"Closed connection for {account_key}")
     
@@ -365,8 +385,8 @@ class EntityBasedGmailManager:
                 break
             
             try:
-                # Poll every 10 seconds for new emails
-                time.sleep(10)
+                # Poll every 5 seconds for new emails (enhanced speed)
+                time.sleep(5)
                 
                 if connection_info['stop_event'].is_set():
                     break
@@ -413,6 +433,213 @@ class EntityBasedGmailManager:
         except Exception as e:
             logging.error(f"Failed to reconnect to {account_key}: {e}")
     
+    def _start_health_monitoring(self):
+        """Start global health monitoring thread"""
+        if self.health_monitor_thread is None or not self.health_monitor_thread.is_alive():
+            self.health_monitor_thread = threading.Thread(
+                target=self._health_monitor_loop,
+                daemon=True
+            )
+            self.health_monitor_thread.start()
+            logging.info("Started global health monitoring thread")
+    
+    def _health_monitor_loop(self):
+        """Global health monitoring loop - checks all connections every 5 minutes"""
+        while not self.health_monitor_stop.is_set():
+            try:
+                # Wait for health check interval (5 minutes)
+                if self.health_monitor_stop.wait(self.health_check_interval):
+                    break
+                
+                # Check health of all active connections
+                self._check_all_connections_health()
+                
+            except Exception as e:
+                logging.error(f"Error in health monitor loop: {e}")
+                time.sleep(30)  # Wait before retrying
+    
+    def _check_all_connections_health(self):
+        """Check health of all active connections and rebuild if needed"""
+        with self.lock:
+            all_accounts_to_check = []
+            
+            # Collect all active account keys
+            for entity_connections in self.entity_connections.values():
+                for account_key in entity_connections.keys():
+                    if account_key not in self.rebuilding_connections:
+                        all_accounts_to_check.append(account_key)
+        
+        # Check each connection (outside of lock to avoid blocking)
+        for account_key in all_accounts_to_check:
+            try:
+                if self._needs_rebuild(account_key):
+                    logging.info(f"Smart rebuilding connection for {account_key}")
+                    self._smart_rebuild_connection(account_key)
+                else:
+                    # Send heartbeat to keep connection alive
+                    self._send_heartbeat(account_key)
+            except Exception as e:
+                logging.error(f"Error checking health for {account_key}: {e}")
+    
+    def _needs_rebuild(self, account_key):
+        """Check if connection needs rebuilding (unhealthy or too old)"""
+        stats = self.connection_stats.get(account_key)
+        if not stats:
+            return True  # No stats means we should rebuild
+        
+        current_time = time.time()
+        
+        # Check if connection is too old (>15 minutes)
+        if current_time - stats['created_time'] > self.max_connection_age:
+            logging.debug(f"Connection {account_key} is too old, needs rebuild")
+            return True
+        
+        # Check if connection is unhealthy (too many recent errors)
+        if stats['error_count'] > 3:
+            logging.debug(f"Connection {account_key} has too many errors, needs rebuild")
+            return True
+        
+        # Check if last heartbeat failed
+        if stats.get('last_heartbeat_failed', False):
+            logging.debug(f"Connection {account_key} heartbeat failed, needs rebuild")
+            return True
+        
+        return False
+    
+    def _send_heartbeat(self, account_key):
+        """Send IMAP NOOP command to keep connection alive"""
+        entity = account_key.split('_')[0]
+        
+        with self.lock:
+            if (entity not in self.entity_connections or 
+                account_key not in self.entity_connections[entity]):
+                return
+            
+            connection_info = self.entity_connections[entity][account_key]
+            mail = connection_info['mail']
+        
+        try:
+            # Send NOOP command to keep connection alive
+            status, response = mail.noop()
+            if status == 'OK':
+                self._update_connection_stats(account_key, 'heartbeat_success')
+                logging.debug(f"Heartbeat successful for {account_key}")
+            else:
+                self._update_connection_stats(account_key, 'heartbeat_failed')
+                logging.warning(f"Heartbeat failed for {account_key}: {response}")
+        except Exception as e:
+            self._update_connection_stats(account_key, 'heartbeat_error')
+            logging.warning(f"Heartbeat error for {account_key}: {e}")
+    
+    def _smart_rebuild_connection(self, account_key):
+        """Intelligently rebuild a connection with rolling reconnection"""
+        entity = account_key.split('_')[0]
+        
+        # Mark as rebuilding to prevent concurrent rebuilds
+        with self.lock:
+            if account_key in self.rebuilding_connections:
+                return  # Already being rebuilt
+            self.rebuilding_connections.add(account_key)
+        
+        try:
+            # Get account info
+            with self.lock:
+                if (entity not in self.entity_connections or 
+                    account_key not in self.entity_connections[entity]):
+                    return
+                
+                connection_info = self.entity_connections[entity][account_key]
+                account_info = connection_info['account_info']
+            
+            logging.info(f"Smart rebuilding connection for {account_key}")
+            
+            # Create new connection
+            new_mail = imaplib.IMAP4_SSL('imap.gmail.com', 993)
+            new_mail.login(account_info['email'], account_info['app_password'])
+            new_mail.select('INBOX')
+            
+            # Replace old connection atomically
+            with self.lock:
+                if (entity in self.entity_connections and 
+                    account_key in self.entity_connections[entity]):
+                    
+                    old_connection_info = self.entity_connections[entity][account_key]
+                    
+                    # Close old connection
+                    try:
+                        old_connection_info['mail'].close()
+                        old_connection_info['mail'].logout()
+                    except:
+                        pass
+                    
+                    # Update with new connection
+                    old_connection_info['mail'] = new_mail
+                    
+                    # Reset connection stats
+                    self._init_connection_stats(account_key)
+                    
+                    logging.info(f"Successfully rebuilt connection for {account_key}")
+            
+            # Fetch latest emails with new connection
+            self._fetch_emails(account_key)
+            
+        except Exception as e:
+            logging.error(f"Failed to smart rebuild connection for {account_key}: {e}")
+            # If rebuild fails, try standard reconnection
+            self._reconnect(account_key)
+        
+        finally:
+            # Remove from rebuilding set
+            with self.lock:
+                self.rebuilding_connections.discard(account_key)
+    
+    def _init_connection_stats(self, account_key):
+        """Initialize connection statistics"""
+        self.connection_stats[account_key] = {
+            'created_time': time.time(),
+            'last_heartbeat': time.time(),
+            'last_heartbeat_failed': False,
+            'error_count': 0,
+            'email_fetch_count': 0,
+            'last_email_fetch': None,
+            'health_status': 'healthy'
+        }
+    
+    def _update_connection_stats(self, account_key, event_type, error=None):
+        """Update connection statistics"""
+        if account_key not in self.connection_stats:
+            self._init_connection_stats(account_key)
+        
+        stats = self.connection_stats[account_key]
+        current_time = time.time()
+        
+        if event_type == 'heartbeat_success':
+            stats['last_heartbeat'] = current_time
+            stats['last_heartbeat_failed'] = False
+            stats['health_status'] = 'healthy'
+        elif event_type == 'heartbeat_failed':
+            stats['last_heartbeat_failed'] = True
+            stats['error_count'] += 1
+            stats['health_status'] = 'unhealthy'
+        elif event_type == 'heartbeat_error':
+            stats['last_heartbeat_failed'] = True
+            stats['error_count'] += 1
+            stats['health_status'] = 'error'
+        elif event_type == 'email_fetch_success':
+            stats['email_fetch_count'] += 1
+            stats['last_email_fetch'] = current_time
+            # Reset error count on successful operation
+            stats['error_count'] = max(0, stats['error_count'] - 1)
+        elif event_type == 'email_fetch_error':
+            stats['error_count'] += 1
+        elif event_type == 'connection_reset':
+            # Reset stats after successful rebuild
+            stats['created_time'] = current_time
+            stats['error_count'] = 0
+            stats['last_heartbeat'] = current_time
+            stats['last_heartbeat_failed'] = False
+            stats['health_status'] = 'healthy'
+
     def _fetch_emails(self, account_key):
         """Fetch the last 50 emails from all folders"""
         entity = account_key.split('_')[0]
@@ -523,6 +750,9 @@ class EntityBasedGmailManager:
                 self.email_cache[account_key] = recent_emails
                 connection_info['last_update'] = time.time()
             
+            # Update connection stats for successful fetch
+            self._update_connection_stats(account_key, 'email_fetch_success')
+            
             # Call update callbacks
             for callback in self.update_callbacks[account_key]:
                 try:
@@ -534,6 +764,8 @@ class EntityBasedGmailManager:
             
         except Exception as e:
             logging.error(f"Error fetching emails for {account_key}: {e}")
+            # Update stats for failed fetch
+            self._update_connection_stats(account_key, 'email_fetch_error', error=str(e))
     
     def _decode_mime_words(self, s):
         """Decode MIME encoded words"""
