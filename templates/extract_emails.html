@@ -194,7 +194,7 @@
                                 class="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500"
                             >
                             <label for="limit_all" class="ml-2 text-sm text-gray-700">
-                                Get All Emails (Max 200 - Server Capacity Limit)
+                                Get All Emails (No Limit)
                             </label>
                         </div>
                         <div class="flex items-center space-x-3">
@@ -330,6 +330,16 @@
                                         </select>
                                     </div>
                                 </th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                    <div class="flex items-center justify-between">
+                                        <span>DMARC Status</span>
+                                        <select id="dmarcFilter" class="ml-2 bg-white border border-gray-300 rounded px-2 py-1 text-xs">
+                                            <option value="All">All</option>
+                                            <option value="PASS">PASS</option>
+                                            <option value="UNKNOWN">UNKNOWN</option>
+                                        </select>
+                                    </div>
+                                </th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">From Domain</th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Subject</th>
                                 <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -428,6 +438,9 @@
                     <td class="px-4 py-3 text-sm">
                         <span class="status-${email.dkim_status.toLowerCase()}">${email.dkim_status}</span>
                     </td>
+                    <td class="px-4 py-3 text-sm">
+                        <span class="status-${email.dmarc_status.toLowerCase()}">${email.dmarc_status}</span>
+                    </td>
                     <td class="px-4 py-3 text-sm text-gray-900">${email.from_domain || 'N/A'}</td>
                     <td class="px-4 py-3 text-sm text-gray-900" title="${email.subject}">${truncateText(email.subject, 50)}</td>
                     <td class="px-4 py-3 text-sm">
@@ -457,6 +470,7 @@
             const subjectFilter = document.getElementById('filter_subject').value.toLowerCase().trim();
             const spfFilter = document.getElementById('spfFilter').value;
             const dkimFilter = document.getElementById('dkimFilter').value;
+            const dmarcFilter = document.getElementById('dmarcFilter').value;
             const typeFilter = document.getElementById('typeFilter').value;
 
             filteredData = extractedData.filter(email => {
@@ -480,6 +494,11 @@
                     return false;
                 }
                 
+                // DMARC filter
+                if (dmarcFilter !== 'All' && email.dmarc_status !== dmarcFilter) {
+                    return false;
+                }
+                
                 // Type filter
                 if (typeFilter !== 'All' && email.email_type !== typeFilter) {
                     return false;
@@ -497,6 +516,7 @@
         document.getElementById('filter_subject').addEventListener('input', applyFilters);
         document.getElementById('spfFilter').addEventListener('change', applyFilters);
         document.getElementById('dkimFilter').addEventListener('change', applyFilters);
+        document.getElementById('dmarcFilter').addEventListener('change', applyFilters);
         document.getElementById('typeFilter').addEventListener('change', applyFilters);
 
         // Copy IP addresses functionality
@@ -542,13 +562,14 @@
                 return;
             }
 
-            const headers = ['IP Address', 'SPF Status', 'DKIM Status', 'From Domain', 'Subject', 'Email Type', 'Category', 'Date'];
+            const headers = ['IP Address', 'SPF Status', 'DKIM Status', 'DMARC Status', 'From Domain', 'Subject', 'Email Type', 'Category', 'Date'];
             const csvContent = [
                 headers.join(','),
                 ...data.map(email => [
                     email.ip_address || '',
                     email.spf_status || '',
                     email.dkim_status || '',
+                    email.dmarc_status || '',
                     email.from_domain || '',
                     `"${(email.subject || '').replace(/"/g, '""')}"`,
                     email.email_type || '',

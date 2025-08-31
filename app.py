@@ -161,8 +161,8 @@ def extract_and_analyze_emails(email_address, app_password, email_limit='all'):
                         # Default to 50 if invalid limit
                         uid_list = uid_list[-50:] if len(uid_list) > 50 else uid_list
                 else:
-                    # For 'all', limit to 200 max
-                    uid_list = uid_list[-200:] if len(uid_list) > 200 else uid_list
+                    # For 'all', get ALL emails (no limit)
+                    pass  # No limit applied
                 
                 for uid in uid_list:
                     try:
@@ -190,14 +190,15 @@ def extract_and_analyze_emails(email_address, app_password, email_limit='all'):
                         ip_address = extract_sender_ip(email_message)
                         spf_status = extract_spf_status(email_message)
                         dkim_status = extract_dkim_status(email_message)
+                        dmarc_status = extract_dmarc_status(email_message)
                         
                         # Determine email type and category
                         email_type = 'Spam' if folder == '[Gmail]/Spam' else 'Inbox'
                         category = ''
                         
                         if email_type == 'Inbox':
-                            # Get Gmail category
-                            category = get_gmail_category(mail, uid)
+                            # Get Gmail category with improved detection
+                            category = get_improved_gmail_category(mail, uid)
                         
                         # Format date
                         try:
@@ -210,6 +211,7 @@ def extract_and_analyze_emails(email_address, app_password, email_limit='all'):
                             'ip_address': ip_address,
                             'spf_status': spf_status,
                             'dkim_status': dkim_status,
+                            'dmarc_status': dmarc_status,
                             'from_domain': from_domain_extracted,
                             'subject': subject[:100],  # Limit length
                             'email_type': email_type,
@@ -289,6 +291,24 @@ def extract_dkim_status(email_message):
     except:
         return 'UNKNOWN'
 
+def extract_dmarc_status(email_message):
+    """Extract DMARC status from Authentication-Results header"""
+    try:
+        auth_results = email_message.get('Authentication-Results', '')
+        if 'dmarc=pass' in auth_results.lower():
+            return 'PASS'
+        elif 'dmarc=fail' in auth_results.lower():
+            return 'FAIL'
+        elif 'dmarc=none' in auth_results.lower():
+            return 'NONE'
+        elif 'dmarc=quarantine' in auth_results.lower():
+            return 'QUARANTINE'
+        elif 'dmarc=reject' in auth_results.lower():
+            return 'REJECT'
+        return 'UNKNOWN'
+    except:
+        return 'UNKNOWN'
+
 def get_gmail_category(mail, uid):
     """Get Gmail category for an email"""
     try:
@@ -308,6 +328,78 @@ def get_gmail_category(mail, uid):
                 return 'Primary'
         return 'Primary'
     except:
+        return 'Primary'
+
+def get_improved_gmail_category(mail, uid):
+    """Get Gmail category with improved detection using multiple methods"""
+    try:
+        # Method 1: Try X-GM-LABELS first (most reliable)
+        result, msg_data = mail.uid('fetch', uid, '(X-GM-LABELS)')
+        if result == 'OK' and msg_data and msg_data[0]:
+            labels_info = msg_data[0][1].decode('utf-8', errors='ignore') if isinstance(msg_data[0][1], bytes) else str(msg_data[0][1])
+            
+            # Check for various label formats
+            labels_lower = labels_info.lower()
+            if any(keyword in labels_lower for keyword in ['category\\\\promotions', 'category/promotions', '"\\\\category\\\\promotions"']):
+                return 'Promotions'
+            elif any(keyword in labels_lower for keyword in ['category\\\\social', 'category/social', '"\\\\category\\\\social"']):
+                return 'Social'
+            elif any(keyword in labels_lower for keyword in ['category\\\\updates', 'category/updates', '"\\\\category\\\\updates"']):
+                return 'Updates'
+            elif any(keyword in labels_lower for keyword in ['category\\\\forums', 'category/forums', '"\\\\category\\\\forums"']):
+                return 'Forums'
+        
+        # Method 2: Try Gmail search queries for categories
+        try:
+            # Check if email is in Promotions category using search
+            status, data = mail.uid('search', 'X-GM-RAW', f'"category:promotions"')
+            if status == 'OK' and data[0] and uid in data[0].split():
+                return 'Promotions'
+            
+            # Check Social category
+            status, data = mail.uid('search', 'X-GM-RAW', f'"category:social"')
+            if status == 'OK' and data[0] and uid in data[0].split():
+                return 'Social'
+            
+            # Check Updates category
+            status, data = mail.uid('search', 'X-GM-RAW', f'"category:updates"')
+            if status == 'OK' and data[0] and uid in data[0].split():
+                return 'Updates'
+            
+            # Check Forums category
+            status, data = mail.uid('search', 'X-GM-RAW', f'"category:forums"')
+            if status == 'OK' and data[0] and uid in data[0].split():
+                return 'Forums'
+            
+        except Exception as e:
+            logging.debug(f"Gmail search method failed for UID {uid}: {e}")
+        
+        # Method 3: Fall back to header analysis for common patterns
+        try:
+            result, msg_data = mail.uid('fetch', uid, '(BODY.PEEK[HEADER])')
+            if result == 'OK' and msg_data and msg_data[0]:
+                header_content = msg_data[0][1].decode('utf-8', errors='ignore').lower()
+                
+                # Look for promotional indicators
+                if any(keyword in header_content for keyword in ['unsubscribe', 'promotional', 'marketing', 'offer', 'deal']):
+                    return 'Promotions'
+                
+                # Look for social indicators
+                social_domains = ['facebook', 'twitter', 'linkedin', 'instagram', 'youtube', 'github']
+                if any(domain in header_content for domain in social_domains):
+                    return 'Social'
+                
+                # Look for update indicators
+                if any(keyword in header_content for keyword in ['newsletter', 'update', 'notification', 'alert']):
+                    return 'Updates'
+                
+        except Exception as e:
+            logging.debug(f"Header analysis failed for UID {uid}: {e}")
+        
+        return 'Primary'
+        
+    except Exception as e:
+        logging.debug(f"Improved category detection failed for UID {uid}: {e}")
         return 'Primary'
 
 def get_gmail_folder_type(mail, uid):
