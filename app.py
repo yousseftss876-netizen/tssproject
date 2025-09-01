@@ -129,7 +129,7 @@ def decode_mime_words(s):
     
     return ''.join(decoded_parts)
 
-def extract_and_analyze_emails(email_address, app_password, email_limit='all'):
+def extract_and_analyze_emails(email_address, app_password, email_limit='all', folder_selection='all'):
     """Extract and analyze emails with SPF, DKIM, IP address, and categorization - Optimized for speed"""
     try:
         # Connect to Gmail
@@ -139,8 +139,13 @@ def extract_and_analyze_emails(email_address, app_password, email_limit='all'):
         
         extracted_emails = []
         
-        # Get folders to check
-        folders_to_check = ['INBOX', '[Gmail]/Spam']
+        # Get folders to check based on user selection
+        if folder_selection == 'inbox':
+            folders_to_check = ['INBOX']
+        elif folder_selection == 'spam':
+            folders_to_check = ['[Gmail]/Spam']
+        else:  # folder_selection == 'all'
+            folders_to_check = ['INBOX', '[Gmail]/Spam']
         
         for folder in folders_to_check:
             try:
@@ -694,8 +699,11 @@ def extract_emails():
             custom_limit = request.form.get('custom_limit', '50').strip()
             email_limit = custom_limit
         
+        # Get folder selection
+        folder_selection = request.form.get('folder_selection', 'all')
+        
         # Extract and analyze emails
-        extracted_data = extract_and_analyze_emails(email_address, app_password, email_limit)
+        extracted_data = extract_and_analyze_emails(email_address, app_password, email_limit, folder_selection)
         
         if extracted_data is None:
             return jsonify({'success': False, 'error': 'Failed to connect to Gmail account. Please check your credentials.'})
