@@ -164,89 +164,64 @@ def extract_and_analyze_emails(email_address, app_password, email_limit='all'):
                         # Default to 50 if invalid limit
                         uid_list = uid_list[-50:] if len(uid_list) > 50 else uid_list
                 
-                # OPTIMIZATION: Batch fetch emails in groups of 20 for much faster processing
-                batch_size = 20
-                total_batches = len(uid_list) // batch_size + (1 if len(uid_list) % batch_size else 0)
-                
                 # Pre-cache Gmail categories for inbox emails (only if needed)
                 category_cache = {}
                 if folder == 'INBOX':
                     category_cache = _build_category_cache_fast(mail, uid_list)
                 
-                for batch_num in range(total_batches):
-                    start_idx = batch_num * batch_size
-                    end_idx = min(start_idx + batch_size, len(uid_list))
-                    batch_uids = uid_list[start_idx:end_idx]
-                    
-                    if not batch_uids:
-                        continue
-                    
-                    # OPTIMIZATION: Fetch multiple emails at once using UID range
-                    uid_range = ','.join(batch_uids)
-                    result, msg_data_list = mail.uid('fetch', uid_range, '(BODY.PEEK[HEADER] FLAGS)')
-                    
-                    if result != 'OK' or not msg_data_list:
-                        continue
-                    
-                    # Process batch results
-                    for i, uid in enumerate(batch_uids):
-                        try:
-                            # Find corresponding message data for this UID
-                            msg_data = None
-                            for data_item in msg_data_list:
-                                if data_item and isinstance(data_item, tuple) and len(data_item) >= 2:
-                                    if uid.encode() in data_item[0]:
-                                        msg_data = data_item
-                                        break
-                            
-                            if not msg_data or not msg_data[1]:
-                                continue
-                            
-                            # Parse email headers only (much faster than full email)
-                            email_message = email.message_from_bytes(msg_data[1])
-                            
-                            # Extract basic info
-                            subject = decode_mime_words(email_message.get('Subject', ''))
-                            from_header = email_message.get('From', '')
-                            date_header = email_message.get('Date', '')
-                            
-                            # Parse from header
-                            from_name, from_email = email.utils.parseaddr(from_header)
-                            from_email = from_email.lower()
-                            from_domain_extracted = from_email.split('@')[-1] if '@' in from_email else ''
-                            
-                            # OPTIMIZATION: Extract security info from headers in batch
-                            ip_address = extract_sender_ip_fast(email_message)
-                            spf_status = extract_spf_status(email_message)
-                            dkim_status = extract_dkim_status(email_message)
-                            dmarc_status = extract_dmarc_status(email_message)
-                            
-                            # Determine email type and category
-                            email_type = 'Spam' if folder == '[Gmail]/Spam' else 'Inbox'
-                            category = category_cache.get(uid, '') if folder == 'INBOX' else ''
-                            
-                            # Format date
-                            try:
-                                parsed_date = email.utils.parsedate_to_datetime(date_header)
-                                formatted_date = parsed_date.strftime('%Y-%m-%d %H:%M')
-                            except:
-                                formatted_date = date_header[:50] if date_header else 'Unknown'
-                            
-                            extracted_emails.append({
-                                'ip_address': ip_address,
-                                'spf_status': spf_status,
-                                'dkim_status': dkim_status,
-                                'dmarc_status': dmarc_status,
-                                'from_domain': from_domain_extracted,
-                                'subject': subject[:100],  # Limit length
-                                'email_type': email_type,
-                                'category': category,
-                                'date': formatted_date
-                            })
-                            
-                        except Exception as e:
-                            logging.error(f"Error processing email UID {uid}: {e}")
+                # OPTIMIZATION: Fetch headers only (faster than full email body)
+                for uid in uid_list:
+                    try:
+                        # Fetch email headers only
+                        result, msg_data = mail.uid('fetch', uid, '(BODY.PEEK[HEADER])')
+                        if result != 'OK' or not msg_data or not msg_data[0]:
                             continue
+                        
+                        # Parse email headers only (much faster than full email)
+                        email_message = email.message_from_bytes(msg_data[0][1])
+                        
+                        # Extract basic info
+                        subject = decode_mime_words(email_message.get('Subject', ''))
+                        from_header = email_message.get('From', '')
+                        date_header = email_message.get('Date', '')
+                        
+                        # Parse from header
+                        from_name, from_email = email.utils.parseaddr(from_header)
+                        from_email = from_email.lower()
+                        from_domain_extracted = from_email.split('@')[-1] if '@' in from_email else ''
+                        
+                        # OPTIMIZATION: Extract security info from headers efficiently
+                        ip_address = extract_sender_ip_fast(email_message)
+                        spf_status = extract_spf_status(email_message)
+                        dkim_status = extract_dkim_status(email_message)
+                        dmarc_status = extract_dmarc_status(email_message)
+                        
+                        # Determine email type and category
+                        email_type = 'Spam' if folder == '[Gmail]/Spam' else 'Inbox'
+                        category = category_cache.get(uid.decode() if isinstance(uid, bytes) else uid, '') if folder == 'INBOX' else ''
+                        
+                        # Format date
+                        try:
+                            parsed_date = email.utils.parsedate_to_datetime(date_header)
+                            formatted_date = parsed_date.strftime('%Y-%m-%d %H:%M')
+                        except:
+                            formatted_date = date_header[:50] if date_header else 'Unknown'
+                        
+                        extracted_emails.append({
+                            'ip_address': ip_address,
+                            'spf_status': spf_status,
+                            'dkim_status': dkim_status,
+                            'dmarc_status': dmarc_status,
+                            'from_domain': from_domain_extracted,
+                            'subject': subject[:100],  # Limit length
+                            'email_type': email_type,
+                            'category': category,
+                            'date': formatted_date
+                        })
+                        
+                    except Exception as e:
+                        logging.error(f"Error processing email UID {uid}: {e}")
+                        continue
                         
             except Exception as e:
                 logging.error(f"Error accessing folder {folder}: {e}")
