@@ -294,7 +294,7 @@
 
             <!-- Results Table -->
             <div class="results-table bg-white rounded-lg shadow-md overflow-hidden">
-                <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
                     <table class="w-full">
                         <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                             <tr>
@@ -519,7 +519,7 @@
         document.getElementById('dmarcFilter').addEventListener('change', applyFilters);
         document.getElementById('typeFilter').addEventListener('change', applyFilters);
 
-        // Copy IP addresses functionality
+        // Copy IP addresses functionality - robust solution for web environments
         document.getElementById('copyIpBtn').addEventListener('click', function() {
             const ipAddresses = filteredData
                 .map(email => email.ip_address)
@@ -527,24 +527,75 @@
                 .join('\n');
             
             if (ipAddresses) {
-                navigator.clipboard.writeText(ipAddresses).then(() => {
-                    // Visual feedback
-                    this.innerHTML = '<i class="fas fa-check"></i>';
-                    this.classList.remove('bg-blue-500', 'hover:bg-blue-600');
-                    this.classList.add('bg-green-500');
-                    
-                    setTimeout(() => {
-                        this.innerHTML = '<i class="fas fa-copy"></i>';
-                        this.classList.remove('bg-green-500');
-                        this.classList.add('bg-blue-500', 'hover:bg-blue-600');
-                    }, 2000);
-                }).catch(() => {
-                    alert('Failed to copy IP addresses to clipboard');
-                });
+                // Try modern clipboard API first, fallback to textarea method
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(ipAddresses).then(() => {
+                        showCopySuccess(this);
+                    }).catch(() => {
+                        fallbackCopyToClipboard(ipAddresses, this);
+                    });
+                } else {
+                    fallbackCopyToClipboard(ipAddresses, this);
+                }
             } else {
                 alert('No IP addresses to copy');
             }
         });
+
+        function showCopySuccess(btn) {
+            btn.innerHTML = '<i class="fas fa-check"></i>';
+            btn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+            btn.classList.add('bg-green-500');
+            
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-copy"></i>';
+                btn.classList.remove('bg-green-500');
+                btn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+            }, 2000);
+        }
+
+        function fallbackCopyToClipboard(text, btn) {
+            // Create temporary textarea for fallback copy
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopySuccess(btn);
+                } else {
+                    // Last resort - show modal with text to manually copy
+                    showCopyModal(text);
+                }
+            } catch (err) {
+                showCopyModal(text);
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        function showCopyModal(text) {
+            // Create modal for manual copying
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                    <h3 class="text-lg font-semibold mb-4">Copy IP Addresses</h3>
+                    <p class="text-sm text-gray-600 mb-3">Select and copy the IP addresses below:</p>
+                    <textarea readonly class="w-full h-32 p-3 border border-gray-300 rounded text-sm font-mono" onclick="this.select()">${text}</textarea>
+                    <div class="flex justify-end mt-4">
+                        <button onclick="this.closest('.fixed').remove()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Close</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
 
         function truncateText(text, maxLength) {
             if (!text) return '';
