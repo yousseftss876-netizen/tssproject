@@ -11,19 +11,19 @@ from flask import Flask, render_template, request, flash, jsonify, redirect, url
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from connection_manager import gmail_manager
 
-# Configure logging
+
 logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET")
 
-# Validate required environment variables - allow fallback for development
+
 if not app.secret_key:
-    # Use a development fallback secret key if SESSION_SECRET is not set
+    
     app.secret_key = "dev-secret-key-change-in-production"
     logging.warning("Using development fallback for SESSION_SECRET. Set SESSION_SECRET environment variable for production.")
 
-# Initialize Flask-Login
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'  # type: ignore
