@@ -158,7 +158,7 @@ def extract_and_analyze_emails(email_address, app_password, email_limit='all'):
                 # Apply email limit based on user selection
                 if email_limit != 'all':
                     try:
-                        limit = min(int(email_limit), 200)  # Max 200 emails
+                        limit = int(email_limit)  # No max limit restriction
                         uid_list = uid_list[-limit:] if len(uid_list) > limit else uid_list
                     except (ValueError, TypeError):
                         # Default to 50 if invalid limit
